@@ -70,13 +70,13 @@ def roulette_log_abs_det_estimator(g: callable,
 
     total_roulette_iterations = sorted(dist.sample(torch.Size((n_roulette_samples,))).long().tolist())
 
-    log_det_sum = torch.zeros(size=(batch_size, event_size), dtype=x.dtype)
+    log_det = torch.zeros(size=(batch_size,), dtype=x.dtype)
     g_value = None
     for n_iterations, m in Counter(total_roulette_iterations).items():
         # Computing truncated power series with length n_iterations (m times), each with n_hutchinson_samples samples
         noise = torch.randn(size=(batch_size, event_size, n_hutchinson_samples, m), dtype=x.dtype)
         w = torch.clone(noise)
-        vjp = torch.clone(noise)
+        total = torch.zeros(size=(batch_size, m), dtype=x.dtype)
         for k in range(1, n_iterations + 1):
             gs_r, ws_r = torch.autograd.functional.vjp(
                 g,
@@ -86,25 +86,15 @@ def roulette_log_abs_det_estimator(g: callable,
                 ),
                 w.view(batch_size * n_hutchinson_samples * m, event_size)
             )
-            w = ws_r.view(batch_size, event_size, n_hutchinson_samples, m)
             if g_value is None:
                 g_value = gs_r.view(batch_size, event_size, n_hutchinson_samples, m)[:, :, 0, 0]
+            w = ws_r.view(batch_size, event_size, n_hutchinson_samples, m)
+            # w = noise @ J^k
+
             p_k = 1 - dist.cdf(torch.tensor(k - 1, dtype=torch.long))
             factor = (-1) ** (k + 1) / (k * p_k)
-            vjp += factor * w
-
-        _, vjp_jac_r = torch.autograd.functional.vjp(
-            g,
-            x[..., None, None].repeat(1, 1, n_hutchinson_samples, m).view(
-                batch_size * n_hutchinson_samples * m,
-                event_size
-            ),
-            vjp.view(batch_size * n_hutchinson_samples * m, event_size)
-        )
-        vjp_jac = vjp_jac_r.view(batch_size, event_size, n_hutchinson_samples, m)
-        log_det_sum += torch.sum(vjp_jac, dim=(2, 3))  # shape: (batch_size, event_size)
-    log_det_averaged = log_det_sum / (sum(total_roulette_iterations) * n_hutchinson_samples)  # (batch_size, event_size)
-    log_det = torch.sum(log_det_averaged, dim=1)  # (batch_size,)
+            total += factor * torch.sum(w * noise, dim=1).mean(dim=1)  # sum over event, average over hutchinson
+        log_det += 1 / n_roulette_samples * torch.sum(total, dim=1)  # (batch_size,)
     return g_value, log_det
 
 
