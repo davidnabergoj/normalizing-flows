@@ -198,9 +198,21 @@ class LogDeterminantEstimator(torch.autograd.Function):
         return (None, None, grad_x, None, None, None, None) + grad_params
 
 
-def log_det_roulette(g: nn.Module, x: torch.Tensor, training: bool = False, p: float = 0.5):
+def log_det_roulette(
+        g: nn.Module,
+        x: torch.Tensor,
+        training: bool = False,
+        p: float = 0.5,
+        n_hutchinson_samples: int = 20,
+        n_roulette_samples: int = 20):
     return LogDeterminantEstimator.apply(
-        lambda *args, **kwargs: roulette_log_abs_det_estimator(*args, **kwargs, p=p),
+        lambda *args, **kwargs: roulette_log_abs_det_estimator(
+            *args,
+            **kwargs,
+            p=p,
+            n_hutchinson_samples=n_hutchinson_samples,
+            n_roulette_samples=n_roulette_samples
+        ),
         g,
         x,
         training,
@@ -208,10 +220,20 @@ def log_det_roulette(g: nn.Module, x: torch.Tensor, training: bool = False, p: f
     )
 
 
-def log_det_power_series(g: nn.Module, x: torch.Tensor, training: bool = False, n_iterations: int = 8,
-                         n_hutchinson_samples: int = 1):
+def log_det_power_series(
+        g: nn.Module,
+        x: torch.Tensor,
+        training: bool = False,
+        n_iterations: int = 8,
+        n_hutchinson_samples: int = 1
+):
     return LogDeterminantEstimator.apply(
-        lambda *args, **kwargs: power_series_log_abs_det_estimator(*args, **kwargs, n_iterations=n_iterations),
+        lambda *args, **kwargs: power_series_log_abs_det_estimator(
+            *args,
+            **kwargs,
+            n_iterations=n_iterations,
+            n_hutchinson_samples=n_hutchinson_samples
+        ),
         g,
         x,
         training,
