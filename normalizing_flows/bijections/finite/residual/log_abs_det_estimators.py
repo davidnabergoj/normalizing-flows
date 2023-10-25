@@ -24,6 +24,7 @@ def power_series_log_abs_det_estimator(g: callable,
     noise = torch.randn(size=(batch_size, event_size, n_hutchinson_samples))
 
     w = torch.clone(noise)
+    w.requires_grad_(training)
     log_abs_det_jac_f = torch.zeros(size=(batch_size,))
     g_value = None
     for k in range(1, n_iterations + 1):
@@ -31,7 +32,8 @@ def power_series_log_abs_det_estimator(g: callable,
         gs_r, ws_r = torch.autograd.functional.vjp(
             g,
             x[..., None].repeat(1, 1, n_hutchinson_samples).view(batch_size * n_hutchinson_samples, event_size),
-            w.view(batch_size * n_hutchinson_samples, event_size)
+            w.view(batch_size * n_hutchinson_samples, event_size),
+            create_graph=training
         )
 
         if g_value is None:
@@ -227,6 +229,9 @@ def log_det_power_series(
         n_iterations: int = 8,
         n_hutchinson_samples: int = 1
 ):
+    x_clone = torch.clone(x)
+    if training:
+        x_clone.requires_grad_(True)
     return LogDeterminantEstimator.apply(
         lambda *args, **kwargs: power_series_log_abs_det_estimator(
             *args,
@@ -235,7 +240,7 @@ def log_det_power_series(
             n_hutchinson_samples=n_hutchinson_samples
         ),
         g,
-        x,
+        x_clone,
         training,
         *list(g.parameters())
     )
