@@ -1,3 +1,8 @@
+from typing import List
+
+import torch
+
+from normalizing_flows.bijections.finite.autoregressive.conditioner_transforms import ConditionerTransform
 from normalizing_flows.bijections.finite.autoregressive.layers import (
     ShiftCoupling,
     AffineCoupling,
@@ -13,14 +18,28 @@ from normalizing_flows.bijections.finite.autoregressive.layers import (
     LRSCoupling,
     LRSForwardMaskedAutoregressive, ElementwiseShift
 )
-from normalizing_flows.bijections.base import BijectiveComposition
+from normalizing_flows.bijections.base import BijectiveComposition, Bijection
 from normalizing_flows.bijections.finite.linear import ReversePermutation
 
 
-class NICE(BijectiveComposition):
-    def __init__(self, event_shape, n_layers: int = 2, **kwargs):
+class AutoregressiveArchitecture(BijectiveComposition):
+    def __init__(self, event_shape, layers: List[Bijection], **kwargs):
         if isinstance(event_shape, int):
             event_shape = (event_shape,)
+        super().__init__(event_shape, layers, **kwargs)
+
+    def l2_regularization(self):
+        total = 0.0
+        n_parameters = 0
+        for m in self.modules():
+            if isinstance(m, ConditionerTransform):
+                n_parameters += sum(p.numel() for p in m.parameters())
+                total += sum(torch.sum(torch.square(p)) for p in m.parameters())
+        return total / n_parameters
+
+
+class NICE(AutoregressiveArchitecture):
+    def __init__(self, event_shape, n_layers: int = 2, **kwargs):
         bijections = [ElementwiseAffine(event_shape=event_shape)]
         for _ in range(n_layers):
             bijections.extend([
@@ -31,10 +50,8 @@ class NICE(BijectiveComposition):
         super().__init__(event_shape, bijections, **kwargs)
 
 
-class RealNVP(BijectiveComposition):
+class RealNVP(AutoregressiveArchitecture):
     def __init__(self, event_shape, n_layers: int = 2, **kwargs):
-        if isinstance(event_shape, int):
-            event_shape = (event_shape,)
         bijections = [ElementwiseAffine(event_shape=event_shape)]
         for _ in range(n_layers):
             bijections.extend([
@@ -45,10 +62,8 @@ class RealNVP(BijectiveComposition):
         super().__init__(event_shape, bijections, **kwargs)
 
 
-class InverseRealNVP(BijectiveComposition):
+class InverseRealNVP(AutoregressiveArchitecture):
     def __init__(self, event_shape, n_layers: int = 2, **kwargs):
-        if isinstance(event_shape, int):
-            event_shape = (event_shape,)
         bijections = [ElementwiseAffine(event_shape=event_shape)]
         for _ in range(n_layers):
             bijections.extend([
@@ -59,14 +74,12 @@ class InverseRealNVP(BijectiveComposition):
         super().__init__(event_shape, bijections, **kwargs)
 
 
-class MAF(BijectiveComposition):
+class MAF(AutoregressiveArchitecture):
     """
     Expressive bijection with slightly unstable inverse due to autoregressive formulation.
     """
 
     def __init__(self, event_shape, n_layers: int = 2, **kwargs):
-        if isinstance(event_shape, int):
-            event_shape = (event_shape,)
         bijections = [ElementwiseAffine(event_shape=event_shape)]
         for _ in range(n_layers):
             bijections.extend([
@@ -77,10 +90,8 @@ class MAF(BijectiveComposition):
         super().__init__(event_shape, bijections, **kwargs)
 
 
-class IAF(BijectiveComposition):
+class IAF(AutoregressiveArchitecture):
     def __init__(self, event_shape, n_layers: int = 2, **kwargs):
-        if isinstance(event_shape, int):
-            event_shape = (event_shape,)
         bijections = [ElementwiseAffine(event_shape=event_shape)]
         for _ in range(n_layers):
             bijections.extend([
@@ -91,10 +102,8 @@ class IAF(BijectiveComposition):
         super().__init__(event_shape, bijections, **kwargs)
 
 
-class CouplingRQNSF(BijectiveComposition):
+class CouplingRQNSF(AutoregressiveArchitecture):
     def __init__(self, event_shape, n_layers: int = 2, **kwargs):
-        if isinstance(event_shape, int):
-            event_shape = (event_shape,)
         bijections = [ElementwiseAffine(event_shape=event_shape)]
         for _ in range(n_layers):
             bijections.extend([
@@ -105,14 +114,12 @@ class CouplingRQNSF(BijectiveComposition):
         super().__init__(event_shape, bijections, **kwargs)
 
 
-class MaskedAutoregressiveRQNSF(BijectiveComposition):
+class MaskedAutoregressiveRQNSF(AutoregressiveArchitecture):
     """
     Expressive bijection with unstable inverse due to autoregressive formulation.
     """
 
     def __init__(self, event_shape, n_layers: int = 2, **kwargs):
-        if isinstance(event_shape, int):
-            event_shape = (event_shape,)
         bijections = [ElementwiseAffine(event_shape=event_shape)]
         for _ in range(n_layers):
             bijections.extend([
@@ -123,10 +130,8 @@ class MaskedAutoregressiveRQNSF(BijectiveComposition):
         super().__init__(event_shape, bijections, **kwargs)
 
 
-class CouplingLRS(BijectiveComposition):
+class CouplingLRS(AutoregressiveArchitecture):
     def __init__(self, event_shape, n_layers: int = 2, **kwargs):
-        if isinstance(event_shape, int):
-            event_shape = (event_shape,)
         bijections = [ElementwiseShift(event_shape=event_shape)]
         for _ in range(n_layers):
             bijections.extend([
@@ -137,10 +142,8 @@ class CouplingLRS(BijectiveComposition):
         super().__init__(event_shape, bijections, **kwargs)
 
 
-class MaskedAutoregressiveLRS(BijectiveComposition):
+class MaskedAutoregressiveLRS(AutoregressiveArchitecture):
     def __init__(self, event_shape, n_layers: int = 2, **kwargs):
-        if isinstance(event_shape, int):
-            event_shape = (event_shape,)
         bijections = [ElementwiseShift(event_shape=event_shape)]
         for _ in range(n_layers):
             bijections.extend([
@@ -151,10 +154,8 @@ class MaskedAutoregressiveLRS(BijectiveComposition):
         super().__init__(event_shape, bijections, **kwargs)
 
 
-class InverseAutoregressiveRQNSF(BijectiveComposition):
+class InverseAutoregressiveRQNSF(AutoregressiveArchitecture):
     def __init__(self, event_shape, n_layers: int = 2, **kwargs):
-        if isinstance(event_shape, int):
-            event_shape = (event_shape,)
         bijections = [ElementwiseAffine(event_shape=event_shape)]
         for _ in range(n_layers):
             bijections.extend([
@@ -165,10 +166,8 @@ class InverseAutoregressiveRQNSF(BijectiveComposition):
         super().__init__(event_shape, bijections, **kwargs)
 
 
-class CouplingDSF(BijectiveComposition):
+class CouplingDSF(AutoregressiveArchitecture):
     def __init__(self, event_shape, n_layers: int = 2, **kwargs):
-        if isinstance(event_shape, int):
-            event_shape = (event_shape,)
         bijections = [ElementwiseAffine(event_shape=event_shape)]
         for _ in range(n_layers):
             bijections.extend([
@@ -179,10 +178,8 @@ class CouplingDSF(BijectiveComposition):
         super().__init__(event_shape, bijections, **kwargs)
 
 
-class UMNNMAF(BijectiveComposition):
+class UMNNMAF(AutoregressiveArchitecture):
     def __init__(self, event_shape, n_layers: int = 2, **kwargs):
-        if isinstance(event_shape, int):
-            event_shape = (event_shape,)
         bijections = [ElementwiseAffine(event_shape=event_shape)]
         for _ in range(n_layers):
             bijections.extend([

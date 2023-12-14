@@ -129,7 +129,8 @@ class Flow(nn.Module):
             context_val: torch.Tensor = None,
             keep_best_weights: bool = True,
             early_stopping: bool = False,
-            early_stopping_threshold: int = 50):
+            early_stopping_threshold: int = 50,
+            l2_lambda: float = 0.0):
         """
         Fit the normalizing flow.
 
@@ -151,6 +152,7 @@ class Flow(nn.Module):
         :param keep_best_weights: if True and validation data is provided, keep the bijection weights with the highest probability of validation data.
         :param early_stopping: if True and validation data is provided, stop the training procedure early once validation loss stops improving for a specified number of consecutive epochs.
         :param early_stopping_threshold: if early_stopping is True, fitting stops after no improvement in validation loss for this many epochs.
+        :param l2_lambda: L2 regularization coefficient.
         """
         # Compute the number of event dimensions
         n_event_dims = int(torch.prod(torch.as_tensor(self.bijection.event_shape)))
@@ -203,8 +205,11 @@ class Flow(nn.Module):
             for train_batch in train_loader:
                 optimizer.zero_grad()
                 train_loss = compute_batch_loss(train_batch, reduction=torch.mean)
+
                 if hasattr(self.bijection, 'regularization'):
                     train_loss += self.bijection.regularization()
+                if l2_lambda > 0 and hasattr(self.bijection, 'l2_regularization'):
+                    train_loss += l2_lambda * self.bijection.l2_regularization()
                 train_loss.backward()
                 optimizer.step()
 
